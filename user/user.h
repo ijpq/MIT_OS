@@ -24,6 +24,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int trace(int);
+struct sysinfo;
+int sysinfo(struct sysinfo *); // 给用户提供调用接口
 
 // ulib.c
 int stat(const char*, struct stat*);

@@ -37,3 +37,4 @@ entry("sbrk");
 entry("sleep");
 entry("uptime");
 entry("trace");
+entry("sysinfo"); // 注册sys_info系统调用的地址，给ecall，启动系统调用

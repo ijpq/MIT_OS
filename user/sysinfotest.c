@@ -6,7 +6,7 @@
 
 void
 sinfo(struct sysinfo *info) {
-  if (sysinfo(info) < 0) {
+  if (sysinfo(info) < 0) { // 用户调用sysinfo的地方
     printf("FAIL: sysinfo failed");
     exit(1);
   }

@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -107,3 +108,29 @@ sys_trace(void)
   p->trace_mask = trace_mask;
   return 0;
 }
+
+// TODO: 1. 这个ptr应该怎么声明？现在这种声明方式是抄的fstat，为什么直接声明为一个整数呢？fstat传进来的也是一个struct stat*。如果声明为struct sysinfo *，那么需要include?
+uint64 
+sys_info(void) {  // 内核函数 sysinfo
+  uint64 ptr; // 用户态的sysinfo函数会接受一个指向struct sysinfo的指针，在kernel中使用argaddr来将这个用户态的指针拷贝到ptr中。这个ptr就是一个指针，所以是一个uint64的整数值。
+  if(argaddr(0, (void*)&ptr) < 0) {  // 可以看下这个argaddr的定义，就是把参数寄存器的值返回来出来。
+    printf("argaddr failed\n");
+    return -1;
+  }
+  
+  // collect amount of free mem
+  uint64 memcount = kcountfreemem();
+  // collect number of process
+  uint64 proccount = kcountfreeproc();
+  // set to struct sysinfo
+  struct sysinfo info;
+  info.freemem = memcount;
+  info.nproc = proccount;
+  // copyout
+  struct proc *p = myproc();
+  
+  if(copyout(p->pagetable, ptr, (char*)&info, sizeof(info)) < 0) { // copyout会把info结构体的内容拷贝到ptr所指向的内存。ptr是用户态给出的内存地址，info结构体是内核态写好的内容。因此就完成了内核向用户空间的数据拷贝
+    printf("copyout failed\n");
+    return -1;
+  }
+  return 0; }
