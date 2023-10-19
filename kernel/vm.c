@@ -143,8 +143,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   if(size == 0)
     panic("mappages: size");
   
-  a = PGROUNDDOWN(va);
-  last = PGROUNDDOWN(va + size - 1);
+  a = PGROUNDDOWN(va); // va & ~(PGSIZE - 1) , i.e. va + 0 / PGSIZE
+  last = PGROUNDDOWN(va + size - 1);  // i.e. va + size -1/ PGSIZE)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
