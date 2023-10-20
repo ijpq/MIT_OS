@@ -1,0 +1,46 @@
+this file records how i implement this lab, about consideration.
+
+
+1. why add a target within Makefile
+
+the lab test execute the command: `make grade`, which then execute `exec trace`
+that's why i add `trace` to Makefile
+
+2. user/user.h
+
+define the funtion declaration
+
+3. user/user.pl
+
+the entry sub is a riscv compilation code snippet. it add a label named `trace`
+, which calling system call SYS_trace. 
+> every arch has its own way of invoking and passing args to the kernel. the 
+riscv arch indicate `ecall` inst to transition to kernel mode, and using reg 
+`a7` to receive the system call args
+
+4. kernel/syscall.h
+
+`SYS_trace` is a defined macro that represent the systemcall number 22
+
+5. kernel/syscall.c
+
+you could find out the syscalls array. each element is a function ptr, points
+to a function return uint64 and receive void args. initialization style is 
+array designators of the form `[constant-expression] = ` which is supported 
+after C99.
+
+if the number stored in reg `a7`, while exec a ecall, is a assigned function 
+ptr, execute the function ptr: `p->trapframe->a0 = syscalls[num]();`
+
+6. kernel/sysproc.c
+
+the `argint` receive 2 args, first is the Nth of args you expect param passed 
+in user mode, second is the ptr you want to store this value from user mode.
+
+in this implementation, trace_mask is the position i store the params passed in
+user mode. 0 means i want to save the first arg of user call, i.e. `int trace(int)`
+
+more in detail, the first arg is saved in trapframe->a0, but i haven't know 
+how the first arg in user call passed to trapframe a0.
+
+
