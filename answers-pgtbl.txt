@@ -1,0 +1,9 @@
+1. speed up system calls
+
+it is absolutely the maximum size of buffer the system call copyout that should
+be faster by using this shared page. i think the answer is sys_sbrk
+
+
+2. print a page table
+
+which fig 3-4?
