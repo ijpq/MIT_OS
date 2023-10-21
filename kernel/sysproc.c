@@ -96,7 +96,6 @@ sys_pgaccess(void)
         pte_t* pte = walk(pagetable, va,0);
         if ((*pte) & PTE_A) {
             buffer |= 1 << (i);
-            printf("%d\n", i);
         }
         *pte &= ~(1 << 6);
         

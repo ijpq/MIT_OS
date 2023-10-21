@@ -1,0 +1,23 @@
+1. walkaddr 第一个参数是user page，第二个参数是多少个page需要检查PTE_A，那么这里的页数是指从userpage之后连续的n个页吗？
+
+是的
+
+2. 如何找到当前需要扫描的页表呢？好像保存在了satp寄存器里了？我看walkaddr函数可以根据给定的用户va，找到对应的pa。但是这里需要一个pagetable，这个参数是把哪个页表给他？按理说，要找到当前user page对应的pa,应该拿着当前cpu做地址翻译的pagetable来进行walkaddr
+
+user的pagetable就是当前process做地址翻译使用的pagetable, 保存在了proc中，可以先获取当前process的指针，再拿到pagetable的指针
+
+3. 我在walk中增加了一行代码，给l0级pte写入PTE_A，这是对的吗？是否walk了，就说明这个pte被`The A bit indicates the virtual page has been read, written, or fetched from since the last time the A bit was cleared.`
+不对.
+经过实验测试，PTE_A是由其他地方自动写好的。不需要再walk中来动这个bit
+
+4. bitmask那里是什么意思？
+
+实验对bitmask的描述是one bit per page, 并且 first page的结果对应least significant bit
+所以，一个科学的方式是通过argint读取，需要detect的page数量，假设为N，然后在系统调用中，先声明一个char*（因为copyout的src参数是这样一个类型）. 然后根据N的值，来用malloc申请对齐到byte的内存。
+我的实验代码中直接写了uint，即N=32，因为是看了pgaccess的测试代码，那里写死了是32个page
+
+-------------------
+
+有两个策略可以调试这个lab
+1. walk中不做pte_A的set，然后让vmprint打印一下pte_a有效的pte，看看是否没有任何pte被打印出来，如果是这样的话，那么就需要在walk中去set Pte_a。如果不是的话，那么说明有硬件会自动set这个pte_A(但我认为不太可能，因为这个lab中，PTE_A是临时定义的)
+
