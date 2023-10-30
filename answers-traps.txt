@@ -1,0 +1,46 @@
+1. Which registers contain arguments to functions? For example, which register holds 13 in main's call to printf?
+
+according to risv manual, the registers a0,...,a7
+the register a2 holds 13 in main's call to printf
+
+
+2. Where is the call to function f in the assembly code for main? Where is the call to g? (Hint: the compiler may inline functions.)
+
+
+I found `printf` at 0x0000628 and then executed inst `jalr 628(ra)` in function main at 0x0003e.
+Write the value of ra by inst `auipc ra, 0x0`, add 0x0 to the value of pc and save it to ra. pc saves the current instance address.
+pc saves the address of the current instance address, 0x00030, so the value of ra is 0x00030.Thus, `jalr` will jump to address 1528, which is 0x5f8, plus 0x30 = 0x628.
+
+the function `int f(int)` locates in address 0x000e, firstly, i should find which line jump into address 0x000e in main.
+but, there is no explicit inst jump into 0x000e.
+according to question hint, function may be inlined and then the function f called within `printf`. it's second argument hold by register `a1`.
+there is a inst `li a1, 12` which corrsponds to results of `f(8)`
+
+call to `int g(int)` within function `f`
+
+3. At what address is the function printf located?
+
+0x000628
+
+
+4. What value is in the register ra just after the jalr to printf in main?
+
+`ra` holds 0x30, maybe, if jalr didn't write the value of `ra`
+
+5. Run the following code.
+
+	unsigned int i = 0x00646c72;
+	printf("H%x Wo%s", 57616, &i);
+      
+What is the output? Here's an ASCII table that maps bytes to characters.
+The output depends on that fact that the RISC-V is little-endian. If the RISC-V were instead big-endian what would you set i to in order to yield the same output? Would you need to change 57616 to a different value?
+
+the output is `HE110 World`.
+as for big-endian, i would change the value i from 0x00646c72 to 0x726c6400
+
+
+6. In the following code, what is going to be printed after 'y='? (note: the answer is not a specific value.) Why does this happen?
+
+	printf("x=%d y=%d", 3);
+      
+it depends on register a2.
