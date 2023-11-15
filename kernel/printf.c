@@ -121,6 +121,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -131,4 +132,28 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+void
+backtrace() {
+  printf("backtrace:\n");
+  uint64 fp;
+  asm volatile("mv %0, s0" : "=r" (fp));
+  uint64 pg_up = PGROUNDUP(fp);
+  while (pg_up != fp) {
+    uint64 ra = *(uint64*)(fp - 8);
+#if 0
+    uint64 groundtruth_ra;
+    asm volatile("mv %0, ra" : "=r" (groundtruth_ra));
+    if (ra != groundtruth_ra) {
+      
+      printf("ra: %x\n", ra);
+      printf("gt-ra: %x\n", groundtruth_ra);
+      exit(-1);
+      panic("ra error");
+    }
+#endif
+    printf("%p\n", (void*)ra);
+    fp = *(uint64*)(fp - 16);
+  }
 }

@@ -1,0 +1,103 @@
+RISC-V assembly
+
+> refer to answers-traps.txt
+
+Backtrace
+
+> ```
+> void
+> backtrace() {
+>   printf("backtrace:\n");
+>   uint64 fp = r_fp();
+>   uint64 pg_up = PGROUNDUP(fp);
+>   while (pg_up != fp) {
+>     uint64 ra = *(uint64*)(fp - 8);
+>     printf("%p\n", (void*)ra);
+>     fp = *(uint64*)(fp - 16);
+>   }
+> }
+> ```
+>
+> 核心代码如上
+>
+> 从寄存器s0中取出frame pointer的值(r_fp是一个inline asm)
+>
+> 计算整个栈空间的栈顶，因为整个栈是一个PGSIZE，所以这里通过计算PGROUNDUP得到
+>
+> fp是一个uint64，表示当前frame的顶的地址。fp - 8 得到当前frame偏移8的地址，这个地址存储了ra的值，所以需要先转为指向uint64的指针，表示一个可以指向ra的指针，再解引用，得到ra的值。
+>
+> fp - 16是caller function的frame pointer，所以最后直接计算caller frame的frame pointer
+
+此外，在backtrace中还插入了这样一段代码，为了检查是否可以每次不通过偏移，而直接使用inline asm读取ra的值
+
+```
+#if 0
+    uint64 groundtruth_ra;
+    asm volatile("mv %0, ra" : "=r" (groundtruth_ra));
+    if (ra != groundtruth_ra) {
+      
+      printf("ra: %x\n", ra);
+      printf("gt-ra: %x\n", groundtruth_ra);
+      exit(-1);
+      panic("ra error");
+    }
+#endif
+```
+
+**测试发现，这里的ra和groundtruth_ra不一致，原因未知**
+
+再观察这样一段代码:
+
+```
+void square() {
+    uint64_t ra;
+    asm volatile("mv %0, ra" : "=r" (ra));
+
+    uint64_t fp;
+  asm volatile("mv %0, s0" : "=r" (fp) );
+
+    uint64_t ra_addr = (fp-8); // calculate ra
+    uint64_t calculated_ra = *(uint64_t*)ra_addr;
+    if(calculated_ra != ra) {
+        exit(-1);
+    }
+    return ;
+}
+
+int main() {
+    square();
+    return 0;
+}
+#############
+# 对应如下这段asm
+#############
+square():                             # @square()
+        addi    sp, sp, -48
+        sd      ra, 40(sp)                      # 8-byte Folded Spill
+        sd      s0, 32(sp)                      # 8-byte Folded Spill
+        addi    s0, sp, 48
+        mv      a0, ra
+        sd      a0, -24(s0)
+        mv      a0, s0
+        sd      a0, -32(s0)
+        ld      a0, -32(s0)
+        addi    a0, a0, -8
+        sd      a0, -40(s0)
+        ld      a0, -40(s0)
+        ld      a0, 0(a0)
+        sd      a0, -48(s0)
+        ld      a0, -48(s0)
+        ld      a1, -24(s0)
+        beq     a0, a1, .LBB1_2
+        j       .LBB1_1
+.LBB1_1:
+        li      a0, -1
+        call    exit@plt
+.LBB1_2:
+        ld      ra, 40(sp)                      # 8-byte Folded Reload
+        ld      s0, 32(sp)                      # 8-byte Folded Reload
+        addi    sp, sp, 48
+        ret
+```
+
+最终比较了a0和a1寄存器，仔细分析这段stack的代码，其实a0和a1都指向ra寄存器的内容。只不过compiler explorer缺少riscv的execution，无法进行assert检查。
