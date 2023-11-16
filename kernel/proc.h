@@ -109,4 +109,7 @@ struct proc {
   uint64 handler;              // alarm handler
   int alarm;
   int interval_cnt;
+  uint64 epc;
+  int require_restore;
+  struct trapframe saved_trapframe;
 };

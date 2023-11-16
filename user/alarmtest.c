@@ -32,6 +32,7 @@ volatile static int count;
 void
 periodic()
 {
+  // exit from kernel code caused by timer interrupts
   count = count + 1;
   printf("alarm!\n");
   sigreturn();

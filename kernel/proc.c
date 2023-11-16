@@ -145,6 +145,8 @@ found:
   p->interval_cnt = 0; // means initial situation; should be assigned to `interval` later.
   p->alarm = 0; // whether enable alarm
   p->handler = 0; // handler address
+  p->require_restore = 0; // require this until invoke alarm handler
+  p->epc = -1;
   return p;
 }
 
@@ -668,10 +670,23 @@ void sigalarm(int interval, uint64 handler_p) {
     p->interval = interval;
     p->handler = handler_p;
     p->interval_cnt = interval;
-    printf("set param\n");
+  }
+}
+
+void restore_trapframe(void) {
+  struct proc* p = myproc();
+  // NOTE: this restore process would be dangerous,
+  // because mem-layout of struct depends on compiler and instruct set.
+  for (int i = 0 ; i < sizeof(*(p->trapframe)) / sizeof(uint64); i++) {
+    *((uint64*)(p->trapframe)+i) = *((uint64*)(&(p->saved_trapframe)) + i);
   }
 }
 
 void sigreturn(void) {
-
+  struct proc *p = myproc();
+  if (p->require_restore==0)
+    panic("unexpected status from sigreturn");
+  restore_trapframe();
+  p->require_restore = 0;
+  p->epc = 0;
 }

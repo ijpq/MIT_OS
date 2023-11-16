@@ -81,6 +81,8 @@ usertrap(void)
     p->interval_cnt--;
     if (p->interval_cnt == 0 && p->alarm) {
       uint64 handler_addr = (p->handler);
+      p->require_restore = 1;
+      p->saved_trapframe = *(struct trapframe*)(p->trapframe);
       p->trapframe->epc = handler_addr;
       p->interval_cnt = p->interval;
     }
