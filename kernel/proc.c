@@ -141,6 +141,10 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->interval = 0; // store interval param
+  p->interval_cnt = 0; // means initial situation; should be assigned to `interval` later.
+  p->alarm = 0; // whether enable alarm
+  p->handler = 0; // handler address
   return p;
 }
 
@@ -653,4 +657,21 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+void sigalarm(int interval, uint64 handler_p) {
+  struct proc* p = myproc();
+  if (interval == 0) {
+    p->alarm = 0;
+  } else {
+    p->alarm = 1;
+    p->interval = interval;
+    p->handler = handler_p;
+    p->interval_cnt = interval;
+    printf("set param\n");
+  }
+}
+
+void sigreturn(void) {
+
 }
