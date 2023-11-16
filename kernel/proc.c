@@ -147,6 +147,7 @@ found:
   p->handler = 0; // handler address
   p->require_restore = 0; // require this until invoke alarm handler
   p->epc = -1;
+  p->enabled = 0;
   return p;
 }
 
@@ -689,4 +690,6 @@ void sigreturn(void) {
   restore_trapframe();
   p->require_restore = 0;
   p->epc = 0;
+  // 当执行sigreturn时，表明handler已经执行过了，所以认为没有计划要执行的handler，因此这里可以再次被timer interrupt触发
+  p->enabled = 0;
 }

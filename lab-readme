@@ -101,3 +101,8 @@ square():                             # @square()
 ```
 
 最终比较了a0和a1寄存器，仔细分析这段stack的代码，其实a0和a1都指向ra寄存器的内容。只不过compiler explorer缺少riscv的execution，无法进行assert检查。
+
+
+Alarm
+
+> 见code注释

@@ -79,12 +79,15 @@ usertrap(void)
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
     p->interval_cnt--;
-    if (p->interval_cnt == 0 && p->alarm) {
+    // 只有当计时器满足interval条件，没有调用sigalarm(0,0)，没有计划要执行的handler时，才进行handler设置
+    if (p->interval_cnt == 0 && p->alarm && !(p->enabled)) {
       uint64 handler_addr = (p->handler);
       p->require_restore = 1;
+      // 保存handler的trapframe，这里直接把整个trapframe结构都存到proc中。担心如果只是保存在内存中，会被free
       p->saved_trapframe = *(struct trapframe*)(p->trapframe);
       p->trapframe->epc = handler_addr;
       p->interval_cnt = p->interval;
+      p->enabled = 1;
     }
     yield();
   }

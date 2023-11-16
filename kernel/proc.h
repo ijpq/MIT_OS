@@ -107,9 +107,10 @@ struct proc {
   char name[16];               // Process name (debugging)
   int interval;                // alarm interval
   uint64 handler;              // alarm handler
-  int alarm;
-  int interval_cnt;
-  uint64 epc;
-  int require_restore;
-  struct trapframe saved_trapframe;
+  int alarm; // 是否启用handler，确保当调用sigalarm(0,0)时，不会进行handler设置
+  int interval_cnt; // cpu时钟的计时器，用来触发handler
+  uint64 epc; // 用于设置handler执行结束后的返回地址，在返回用户空间时，回到handler下一个指令
+  int require_restore; // 用于标记是否需要恢复trapframe，debug用的。
+  struct trapframe saved_trapframe; // 保存handler的trapframe, 用于在sigreturn执行结束后，恢复到handler的trapframe状态
+  int enabled; // 标记是否已经设置了handler，如果已经设置了handler,那么通过epc执行handler时，再有interrupt触发，会检查这个变量，使handler不会再次设置到epc里
 };
