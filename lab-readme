@@ -106,3 +106,10 @@ square():                             # @square()
 Alarm
 
 > 见code注释
+
+
+EXTRA:
+
+如果希望了解如何调试xv6，参考：https://youtu.be/s-Z5t_yTyTM?si=M9SQDGafeBJxnGDd
+
+例如，如果希望检查在执行handler期间，如果发生timer interrupts，trapframe中哪些寄存器做了修改，可以break sigreturn这个系统调用，在这里我们已经保存了触发handler时的trapframe，可以对比当前sigreturn系统调用时产生的trapframe和另一个trapframe相比，修改了哪些regs
