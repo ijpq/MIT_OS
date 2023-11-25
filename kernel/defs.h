@@ -1,3 +1,6 @@
+#include "types.h"
+typedef uint64 *pagetable_t; // 512 PTEs
+typedef uint64 pte_t;
 struct buf;
 struct context;
 struct file;
@@ -63,6 +66,12 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+void            incr_ref(uint64);
+void            decr_ref(uint64);
+void            set_ref(uint64, int);
+uint8             get_ref(uint64);
+struct spinlock* get_ref_lock();
+void cow(struct proc* p, uint64 va);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -170,6 +179,8 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+pte_t*          walk(pagetable_t, uint64, int);
+int             is_runtime_pa(uint64);
 
 // plic.c
 void            plicinit(void);

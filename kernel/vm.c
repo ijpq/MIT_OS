@@ -15,6 +15,8 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+extern uint32 reference_cnt[];
+
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -146,11 +148,17 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
-    if((pte = walk(pagetable, a, 1)) == 0)
+    if((pte = walk(pagetable, a, 1)) == 0) {
+      printf("mappages walk error\n");
       return -1;
+    }
     if(*pte & PTE_V)
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
+    printf("mappages pte %p to %p\n", pte, pa);
+    if (is_runtime_pa(pa)) {
+      incr_ref(pa);
+    }
     if(a == last)
       break;
     a += PGSIZE;
@@ -174,13 +182,22 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
+    // 应该是page table被写错了, 否则这里不会得到一个pa是超过这个范围的
+    if (PTE2PA(*pte) > PHYSTOP)
+      panic("unexpected");
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+    uint64 pa = PTE2PA(*pte);
+    if (is_runtime_pa(pa)) {
+      decr_ref(pa);
+    }
     if(do_free){
-      uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      if (!is_runtime_pa(pa) || (is_runtime_pa(pa) && get_ref(pa) == 0)) {
+        printf("uvmunmap pa: %p\n", pa);
+        kfree((void*)pa);
+      }
     }
     *pte = 0;
   }
@@ -303,7 +320,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -311,20 +327,19 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+    *pte &= ~PTE_W; // clear WRITE for parent
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
+    flags |= PTE_COW; // set cow for child
+
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+        panic("mappages failed");
+      return -1;
     }
+    pte_t* new_pte = walk(new, i, 0);
+    printf("set pte: %p cow\n", new_pte);
   }
   return 0;
 
- err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
-  return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -350,6 +365,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    // pa0 = walkaddr(pagetable, va0);
+    cow(myproc(), va0);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
@@ -431,4 +448,10 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int is_runtime_pa(uint64 pa) {
+  if ((uint64)pa >= KERNBASE && (uint64)pa <= PHYSTOP)
+    return 1;
+  return 0;
 }

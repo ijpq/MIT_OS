@@ -10,6 +10,7 @@ struct spinlock tickslock;
 uint ticks;
 
 extern char trampoline[], uservec[], userret[];
+extern uint32 reference_cnt[];
 
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
@@ -49,6 +50,8 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
+
+  uint64 cause = r_scause();
   
   if(r_scause() == 8){
     // system call
@@ -67,6 +70,8 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (cause == 15 || cause == 13) {
+    cow(myproc(), r_stval());
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
