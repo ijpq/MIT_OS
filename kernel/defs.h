@@ -71,7 +71,7 @@ void            decr_ref(uint64);
 void            set_ref(uint64, int);
 uint8             get_ref(uint64);
 struct spinlock* get_ref_lock();
-void cow(struct proc* p, uint64 va);
+int cow(struct proc* p, uint64 va);
 
 // log.c
 void            initlog(int, struct superblock*);

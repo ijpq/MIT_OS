@@ -138,4 +138,5 @@ userret:
         
         # return to user mode and user pc.
         # usertrapret() set up sstatus and sepc.
+        # 这个sret不断返回到usertrap内核函数，gdb检查一下此处的sepc。对比一下正常情况下,sepc寄存器的区别
         sret

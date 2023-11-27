@@ -106,15 +106,24 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
+  // kfree的调用处:
+  // 1. uvmunmap
+  // 2. freerange <- init
+  // 3. mappages failed
+  // 4. arbitary
+  // 目前，总会de ref.
   struct run *r;
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP) {
-    printf("mod pgsize: %d\n", (uint64)pa % PGSIZE);
-    printf("lower than end: %d\n", (char*)pa < end);
-    printf("large eq than phystop: %d\n", (uint64)pa >= PHYSTOP);
-    printf("pa %p\n", pa);
     panic("kfree");
   }
 
+  if (is_runtime_pa((uint64)pa)) {
+    uint8 ref = get_ref((uint64)pa);
+    if (ref > 1) {
+      set_ref((uint64)pa, ref-1);
+      return ;
+    }
+  }
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -123,7 +132,8 @@ kfree(void *pa)
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
-  set_ref((uint64)pa, 0);
+  if (is_runtime_pa((uint64)pa))
+    set_ref((uint64)pa, 0);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -139,13 +149,14 @@ kalloc(void)
   if(r)
     kmem.freelist = r->next;
   release(&kmem.lock);
+
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
 
 #include "proc.h"
-void cow(struct proc* p, uint64 va) {
+int cow(struct proc* p, uint64 va) {
     pagetable_t usr_pgtbl = p->pagetable;
     pte_t *usr_pte = walk(usr_pgtbl, va, 0);
     if (usr_pte == 0) {
@@ -154,35 +165,21 @@ void cow(struct proc* p, uint64 va) {
     }
 
     int flags = PTE_FLAGS(*usr_pte);
-    printf("detect pte: %p whether cow\n", usr_pte);
     if (flags & PTE_COW) {
         char* mem;
         if ((mem = kalloc()) == 0) {
-            // TODO: kill the proc
-            p->killed = 1;
-            panic("usertrap: cannot kalloc");
+            printf("usertrap: cannot kalloc\n");
+            return -1;
         }
         memmove(mem, (char*)PTE2PA(*usr_pte), PGSIZE);
-        printf("pte %p is cow, change from pa %p to pa %p\n", usr_pte, mem, PTE2PA(*usr_pte));
 
-#if 0
-        decr_ref((uint64)PTE2PA(*usr_pte));
-        if (get_ref(PTE2PA(*usr_pte)) == 0) {
-          kfree((char*)PTE2PA(*usr_pte));
-        }
-        incr_ref((uint64)mem);
-        pte_t newpte = PA2PTE(mem);
-        newpte = ((newpte | PTE_FLAGS(*usr_pte)) | PTE_W) & ~PTE_COW;
-        *usr_pte = newpte;
-#endif
-        flags &= PTE_W;
-        flags |= ~PTE_COW;
-        uvmunmap(usr_pgtbl, PGROUNDDOWN(va), 1, 1);
-        // after uvmunmap, the pte would be zero
-
-        if (mappages(usr_pgtbl, va, PGSIZE, (uint64)mem, flags) != 0) {
+        flags |= PTE_W; // set write flag
+        flags &= ~PTE_COW; // clear cow
+        uvmunmap(usr_pgtbl, PGROUNDDOWN(va), 1, 1); // do_free是为了去掉旧pa的一个ref
+        if (mappages(usr_pgtbl, va, PGSIZE - (va % PGSIZE), (uint64)mem, flags) != 0) {
             kfree(mem);
             panic("cannot map to new pa");
         }
     }
+    return 0;
 }

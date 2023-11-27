@@ -15,7 +15,6 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-extern uint32 reference_cnt[];
 
 // Make a direct-map page table for the kernel.
 pagetable_t
@@ -155,7 +154,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     if(*pte & PTE_V)
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
-    printf("mappages pte %p to %p\n", pte, pa);
     if (is_runtime_pa(pa)) {
       incr_ref(pa);
     }
@@ -182,23 +180,14 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    // 应该是page table被写错了, 否则这里不会得到一个pa是超过这个范围的
-    if (PTE2PA(*pte) > PHYSTOP)
-      panic("unexpected");
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     uint64 pa = PTE2PA(*pte);
-    if (is_runtime_pa(pa)) {
-      decr_ref(pa);
-    }
     if(do_free){
-      if (!is_runtime_pa(pa) || (is_runtime_pa(pa) && get_ref(pa) == 0)) {
-        printf("uvmunmap pa: %p\n", pa);
         kfree((void*)pa);
-      }
-    }
+    } 
     *pte = 0;
   }
 }
@@ -327,16 +316,15 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    *pte &= ~PTE_W; // clear WRITE for parent
+    *pte &= ~PTE_W; // clear WRITE for parent and child
     flags = PTE_FLAGS(*pte);
     flags |= PTE_COW; // set cow for child
 
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
         panic("mappages failed");
+        uvmunmap(new, 0, i / PGSIZE, 0);
       return -1;
     }
-    pte_t* new_pte = walk(new, i, 0);
-    printf("set pte: %p cow\n", new_pte);
   }
   return 0;
 
@@ -364,9 +352,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
+    cow(myproc(), dstva);
     va0 = PGROUNDDOWN(dstva);
-    // pa0 = walkaddr(pagetable, va0);
-    cow(myproc(), va0);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
