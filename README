@@ -1,3 +1,5 @@
+!!!**实验有个bug，shell不能返回到user mode. 怀疑是这份系统代码有问题，因为2020的另一个实验代码也在cow实验中插入了一个修复booting的commit: (https://github.com/Miigon/my-xv6-labs-2020/commit/3e4542e07cfd857c08e4803e1a10c1c4ddab20ac);在没有这个commit情况下，只实现cow同样造成无法启动或返回**!!!
+
 xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
 Version 6 (v6).  xv6 loosely follows the structure and style of v6,
 but is implemented for a modern RISC-V multiprocessor using ANSI C.
