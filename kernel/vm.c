@@ -317,8 +317,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     *pte &= ~PTE_W; // clear WRITE for parent and child
+    *pte |= PTE_COW; // set COW for parent and child
     flags = PTE_FLAGS(*pte);
-    flags |= PTE_COW; // set cow for child
 
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
         panic("mappages failed");
