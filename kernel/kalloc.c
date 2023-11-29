@@ -25,7 +25,7 @@ struct {
 
 // Define the reference count array and lock.
 struct spinlock ref_lock;
-uint8 reference_cnt[((uint64)(PHYSTOP - KERNBASE)) / PGSIZE];
+int reference_cnt[((PHYSTOP - KERNBASE)) / PGSIZE];
 
 // Init the reference count array.
 void init_ref() {
@@ -36,44 +36,29 @@ void init_ref() {
 }
 
 void incr_ref(uint64 pa) {
+  OUTOFRANGE_RETURN(pa);
   acquire(&ref_lock);
-  if (pa < KERNBASE || pa > PHYSTOP) {
-    panic("incr");
-    exit(-1);
-  }
   reference_cnt[(pa-KERNBASE)/PGSIZE] += 1;
   release(&ref_lock);
 }
 
 void decr_ref(uint64 pa) {
+  OUTOFRANGE_RETURN(pa);
   acquire(&ref_lock);
-  if (pa < KERNBASE || pa > PHYSTOP) {
-    panic("decr");
-    exit(-1);
-  }
   reference_cnt[(pa-KERNBASE)/PGSIZE] -= 1;
   release(&ref_lock);
 }
 
+// lock manual
 void set_ref(uint64 pa, int v) {
-  if (pa < KERNBASE || pa > PHYSTOP) {
-    panic("set ref");
-    exit(-1);
-  }
-  acquire(&ref_lock);
+  OUTOFRANGE_RETURN(pa);
   reference_cnt[(pa-KERNBASE)/PGSIZE] = v;
-  release(&ref_lock);
 }
 
-uint8 get_ref(uint64 pa) {
-  if (pa < KERNBASE || pa > PHYSTOP) {
-    panic("read ref");
-    exit(-1);
-  }
-  uint8 ret;
-  acquire(&ref_lock);
+// lock manual
+int get_ref(uint64 pa) {
+  int ret;
   ret = reference_cnt[(pa-KERNBASE)/PGSIZE];
-  release(&ref_lock);
   return ret;
 }
 
@@ -118,11 +103,14 @@ kfree(void *pa)
   }
 
   if (is_runtime_pa((uint64)pa)) {
-    uint8 ref = get_ref((uint64)pa);
+    acquire(&ref_lock);
+    int ref = get_ref((uint64)pa);
     if (ref > 1) {
       set_ref((uint64)pa, ref-1);
+      release(&ref_lock);
       return ;
     }
+    release(&ref_lock);
   }
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -132,8 +120,11 @@ kfree(void *pa)
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
-  if (is_runtime_pa((uint64)pa))
+  if (is_runtime_pa((uint64)pa)) {
+    acquire(&ref_lock);
     set_ref((uint64)pa, 0);
+    release(&ref_lock);
+  }
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -152,16 +143,20 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  acquire(&ref_lock);
+  set_ref((uint64)r, 1);
+  release(&ref_lock);
   return (void*)r;
 }
 
 #include "proc.h"
 int cow(struct proc* p, uint64 va) {
+  if (va >= MAXVA) return -1;
     pagetable_t usr_pgtbl = p->pagetable;
     pte_t *usr_pte = walk(usr_pgtbl, va, 0);
     if (usr_pte == 0) {
-        panic("usertrap: cannot walk");
-        exit(-1);
+        printf("usertrap: cannot walk\n");
+        return -1;
     }
 
     int flags = PTE_FLAGS(*usr_pte);
@@ -175,11 +170,30 @@ int cow(struct proc* p, uint64 va) {
 
         flags |= PTE_W; // set write flag
         flags &= ~PTE_COW; // clear cow
-        uvmunmap(usr_pgtbl, PGROUNDDOWN(va), 1, 1); // do_free是为了去掉旧pa的一个ref
-        if (mappages(usr_pgtbl, va, PGSIZE - (va % PGSIZE), (uint64)mem, flags) != 0) {
+        uvmunmap(usr_pgtbl, PGROUNDDOWN(va), 1, 1); // do_free是为了去掉旧pa的一个ref, 因为kfree中会decr
+        if (mappages(usr_pgtbl, va, 1, (uint64)mem, flags) != 0) {
             kfree(mem);
             panic("cannot map to new pa");
         }
     }
+
+    // check ref
+    acquire(&ref_lock);
+    for (uint32 i = 0; i < (PHYSTOP-KERNBASE)/PGSIZE; i++) {
+      if (reference_cnt[i] < 0)
+        panic("unexpected ref");
+    }
+    release(&ref_lock);
     return 0;
+}
+
+int uvmcheckcowpage(uint64 va) {
+  pte_t *pte;
+  struct proc *p = myproc();
+  
+  return va < MAXVA // maxva范围内
+    && va < p->sz // 在进程内存范围内
+    && ((pte = walk(p->pagetable, va, 0))!=0)
+    && (*pte & PTE_V) // 页表项存在
+    && (*pte & PTE_COW); // 页是一个懒复制页
 }

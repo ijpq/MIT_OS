@@ -154,9 +154,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     if(*pte & PTE_V)
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
-    if (is_runtime_pa(pa)) {
-      incr_ref(pa);
-    }
     if(a == last)
       break;
     a += PGSIZE;
@@ -186,7 +183,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not a leaf");
     uint64 pa = PTE2PA(*pte);
     if(do_free){
-        kfree((void*)pa);
+      kfree((void*)pa);
     } 
     *pte = 0;
   }
@@ -319,12 +316,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     *pte &= ~PTE_W; // clear WRITE for parent and child
     *pte |= PTE_COW; // set COW for parent and child
     flags = PTE_FLAGS(*pte);
-
+    
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
-        panic("mappages failed");
         uvmunmap(new, 0, i / PGSIZE, 0);
+        panic("uvmcopy: mappages failed");
       return -1;
     }
+    incr_ref((uint64)pa);
   }
   return 0;
 
@@ -352,7 +350,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
-    cow(myproc(), dstva);
+    if (uvmcheckcowpage(dstva)) {
+      int cow_ret = cow(myproc(), dstva);
+      if (cow_ret == -1) exit(-1);
+    }
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)

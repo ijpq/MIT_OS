@@ -69,9 +69,10 @@ void            kinit(void);
 void            incr_ref(uint64);
 void            decr_ref(uint64);
 void            set_ref(uint64, int);
-uint8             get_ref(uint64);
+int             get_ref(uint64);
 struct spinlock* get_ref_lock();
 int cow(struct proc* p, uint64 va);
+int uvmcheckcowpage(uint64 va);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -195,3 +196,4 @@ void            virtio_disk_intr(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+#define OUTOFRANGE_RETURN(x) if (x < KERNBASE || x > PHYSTOP) return;
