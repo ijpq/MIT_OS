@@ -1,0 +1,3 @@
+missing key indicates there lots of keys are not here but should been there.
+execute the insert entry into hash table, it would be insert to the first node of the link node, then change and save the first node address.
+while more than one thread execute this sequence, may results in one node drop.
