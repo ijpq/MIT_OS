@@ -7,6 +7,8 @@
 static int nthread = 1;
 static int round = 0;
 
+pthread_mutex_t nthread_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 struct barrier {
   pthread_mutex_t barrier_mutex;
   pthread_cond_t barrier_cond;
@@ -30,6 +32,16 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
+  pthread_mutex_lock(&bstate.barrier_mutex);
+  if (bstate.nthread < nthread - 1) {
+    bstate.nthread++;
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex); // will release mutex
+  } else if (bstate.nthread == nthread - 1) {
+    bstate.nthread = 0;
+    bstate.round += 1;
+    pthread_cond_broadcast(&bstate.barrier_cond);
+  }
+  pthread_mutex_unlock(&bstate.barrier_mutex);
   
 }
 
@@ -75,4 +87,6 @@ main(int argc, char *argv[])
     assert(pthread_join(tha[i], &value) == 0);
   }
   printf("OK; passed\n");
+  pthread_mutex_destroy(&nthread_mutex);
+  pthread_mutex_destroy(&bstate.barrier_mutex);
 }
